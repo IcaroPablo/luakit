@@ -5,6 +5,7 @@
 ### Added
 
 - Added GitHub Actions CI workflows with cross-platform testing across Linux distributions (Alpine, Arch, Debian, Ubuntu), BSDs (FreeBSD, OpenBSD, NetBSD), and other systems.
+- Added the `completion.as_you_type` setting, off by default: the completion menu opens, and updates, while typing in the command line, once typing pauses for `completion.as_you_type_delay` milliseconds. Nothing is selected until `<Tab>` or `<Shift-Tab>`.
 
 ### Changed
 
@@ -12,6 +13,8 @@
 
 ### Fixed
 
+- Fixed leaving completion by moving the cursor, which moved it to the end of the command line.
+- Fixed completion closing whenever the command line held non-ASCII text.
 - Fixed a crash when serializing NULL lightuserdata values, which could occur with garbage-collected Lua objects used as weak table keys (fixes #1117).
 - Fixed a buffer overflow in IPC socket handling when socket paths exceed the `AF_UNIX` `sun_path` limit; replaced unsafe `strcpy` with a length-checked copy.
 - Fixed `dom_element.c` to be C99/clang compliant.
