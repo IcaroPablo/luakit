@@ -30,7 +30,7 @@ add_binds("command", {
 --- Return to command mode with original text and with original cursor position.
 function _M.exit_completion(w)
     local state = data[w]
-    w:enter_cmd(state.orig_text)
+    w:enter_cmd(state.orig_text, { pos = state.orig_pos })
 end
 
 local parse_completion_format = function (fmt)
@@ -142,7 +142,8 @@ function _M.update_completions(w, text, pos)
     local input = w.ibar.input
     text, pos = text or input.text, pos or input.position
 
-    if pos ~= #text then _M.exit_completion(w) return end
+    -- The position counts characters, not bytes
+    if pos ~= (utf8.len(text) or #text) then _M.exit_completion(w) return end
 
     -- Don't rebuild the menu if the text & cursor position are the same
     if text == state.text and pos == state.pos then return end
