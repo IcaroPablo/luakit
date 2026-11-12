@@ -4,6 +4,12 @@
 -- supports completing URLs from the user's bookmarks and history, and also
 -- supports completing partially typed commands.
 --
+-- Pressing `<Tab>` in the command line opens the completion menu and selects
+-- its first item. With the `completion.as_you_type` setting on, the menu also
+-- opens, and updates, while you type, once typing pauses for
+-- `completion.as_you_type_delay` milliseconds; nothing is selected until
+-- `<Tab>` or `<Shift-Tab>` moves through the items.
+--
 -- @module completion
 -- @copyright 2010-2011 Mason Larobina <mason.larobina@gmail.com>
 -- @copyright 2010 Fabian Streitel <karottenreibe@gmail.com>
@@ -13,6 +19,7 @@ local history = require("history")
 local bookmarks = require("bookmarks")
 local modes = require("modes")
 local settings = require("settings")
+local window = require("window")
 local new_mode, get_mode = modes.new_mode, modes.get_mode
 local add_binds = modes.add_binds
 local escape = lousy.util.escape
@@ -31,6 +38,37 @@ add_binds("command", {
 function _M.exit_completion(w)
     local state = data[w]
     w:enter_cmd(state.orig_text, { pos = state.orig_pos })
+end
+
+-- Work waiting for typing to pause; only one window has the keyboard, so one
+-- timer serves them all
+local typing_timer = timer{ interval = 100 }
+local after_typing
+
+local function run_after_typing()
+    if typing_timer.started then typing_timer:stop() end
+    local func = after_typing
+    after_typing = nil
+    if func then func() end
+end
+
+typing_timer:add_signal("timeout", run_after_typing)
+
+local function when_typing_pauses(func)
+    if typing_timer.started then typing_timer:stop() end
+    local delay = settings.get_setting("completion.as_you_type_delay")
+    if delay <= 0 then
+        after_typing = nil
+        return func()
+    end
+    after_typing = func
+    typing_timer.interval = delay
+    typing_timer:start()
+end
+
+local function cursor_at_end(input)
+    local text = input.text
+    return input.position == (utf8.len(text) or #text)
 end
 
 local parse_completion_format = function (fmt)
@@ -160,7 +198,8 @@ function _M.update_completions(w, text, pos)
         w.menu:show()
         if not state.built then
             state.built = true
-            if rows[2] then w.menu:move_down() end
+            -- Opened while typing, nothing is selected until <Tab>
+            if not state.as_you_type then w.menu:move_down() end
         end
         state.lock = false
     else
@@ -169,22 +208,60 @@ function _M.update_completions(w, text, pos)
 end
 
 local function input_change_cb (w)
-    if not data[w].lock then
-        local input = w.ibar.input
-        data[w].orig_text = input.text
-        data[w].orig_pos = input.position
-        if input.position == 0 then
-            _M.exit_completion(w)
-        else
-            _M.update_completions(w)
-        end
+    local state = data[w]
+    if state.lock then return end
+    local input = w.ibar.input
+    state.orig_text = input.text
+    state.orig_pos = input.position
+    if input.position == 0 then
+        _M.exit_completion(w)
+    elseif settings.get_setting("completion.as_you_type") then
+        when_typing_pauses(function ()
+            if data[w] == state and w:is_mode("completion") then
+                _M.update_completions(w)
+            end
+        end)
+    else
+        _M.update_completions(w)
     end
 end
 
+-- Opens the completion menu once typing pauses in the command line. Only
+-- keys that no binding took reach the input bar, so they're typing; text set
+-- any other way, like entering a command or going through the command
+-- history, opens nothing.
+local typing = setmetatable({}, { __mode = "k" })
+
+local function complete_as_you_type(w)
+    if not (w.win and w:is_mode("command")) then return end
+    local input = w.ibar.input
+    if input.text == ":" or not cursor_at_end(input) then return end
+    w:set_mode("completion", { as_you_type = true })
+end
+
+window.add_signal("init", function (w)
+    -- Runs after the window's own handler, and only if no binding matched
+    w.win:add_signal("key-press", function ()
+        if not w:is_mode("command") then return end
+        typing[w] = true
+        luakit.idle_add(function ()
+            typing[w] = nil
+            return false
+        end)
+    end)
+    w.ibar.input:add_signal("changed", function ()
+        if not typing[w] then return end
+        typing[w] = nil
+        if w:is_mode("command") and settings.get_setting("completion.as_you_type") then
+            when_typing_pauses(function () complete_as_you_type(w) end)
+        end
+    end)
+end)
+
 new_mode("completion", {
-    enter = function (w)
+    enter = function (w, opts)
         -- Clear state
-        local state = {}
+        local state = { as_you_type = opts and opts.as_you_type }
         data[w] = state
 
         -- Save original text and cursor position
@@ -223,20 +300,25 @@ new_mode("completion", {
     end,
 })
 
+-- Moves through the menu, after bringing it up to date with what was typed
+local function select_next(w)
+    run_after_typing()
+    if w:is_mode("completion") then w.menu:move_down() end
+end
+
+local function select_prev(w)
+    run_after_typing()
+    if w:is_mode("completion") then w.menu:move_up() end
+end
+
 -- Command completion binds
 add_binds("completion", {
-    { "<Tab>", "Select next matching completion item.",
-        function (w) w.menu:move_down() end },
-    { "<Shift-Tab>", "Select previous matching completion item.",
-        function (w) w.menu:move_up() end },
-    { "<Up>", "Select next matching completion item.",
-        function (w) w.menu:move_up() end },
-    { "<Down>", "Select previous matching completion item.",
-        function (w) w.menu:move_down() end },
-    { "<Control-j>", "Select next matching completion item.",
-        function (w) w.menu:move_down() end },
-    { "<Control-k>", "Select previous matching completion item.",
-        function (w) w.menu:move_up() end },
+    { "<Tab>", "Select next matching completion item.", select_next },
+    { "<Shift-Tab>", "Select previous matching completion item.", select_prev },
+    { "<Up>", "Select previous matching completion item.", select_prev },
+    { "<Down>", "Select next matching completion item.", select_next },
+    { "<Control-j>", "Select next matching completion item.", select_next },
+    { "<Control-k>", "Select previous matching completion item.", select_prev },
     { "<Escape>", "Stop completion and restore original command.",
         _M.exit_completion },
     { "<Control-[>", "Stop completion and restore original command.",
@@ -317,7 +399,24 @@ settings.register_settings({
         type = "number", min = 1,
         default = 25,
         desc = "Number of completion items for history and bookmarks."
-    }
+    },
+    ["completion.as_you_type"] = {
+        type = "boolean",
+        default = false,
+        desc = [=[
+            Whether the completion menu opens, and updates, while you type in
+            the command line, without pressing `<Tab>` first. Nothing is
+            selected until `<Tab>` or `<Shift-Tab>` moves through the items.
+        ]=],
+    },
+    ["completion.as_you_type_delay"] = {
+        type = "number", min = 0,
+        default = 100,
+        desc = [=[
+            How long typing must pause, in milliseconds, before the completion
+            menu opens or updates, when `completion.as_you_type` is on.
+        ]=],
+    },
 })
 
 completers.history = {
