@@ -511,6 +511,9 @@ _M.methods = {
         view.parent:remove(view)
         if settings.get_setting("window.close_with_last_tab") == true and w.tabs:count() == 0 then
             w:close_win()
+            -- a window that closed has no fields left; one that refused to
+            -- close gets a blank tab below
+            if not w.tabs then return end
         end
         -- Treat a blank last tab as an empty notebook (if blank_last=true)
         if blank_last ~= false and w.tabs:count() == 0 then
