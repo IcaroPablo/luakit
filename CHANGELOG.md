@@ -5,6 +5,7 @@
 ### Added
 
 - Added GitHub Actions CI workflows with cross-platform testing across Linux distributions (Alpine, Arch, Debian, Ubuntu), BSDs (FreeBSD, OpenBSD, NetBSD), and other systems.
+- Added the `webview` widget property `is_muted`, which mutes or unmutes all of a view's audio.
 
 ### Changed
 

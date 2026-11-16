@@ -34,6 +34,15 @@ T.test_webview_widget_privacy = function ()
     assert.is_true(v.private)
 end
 
+T.test_webview_widget_is_muted = function ()
+    local v = widget{type="webview"}
+    assert.is_false(v.is_muted)
+    v.is_muted = true
+    assert.is_true(v.is_muted)
+    v.is_muted = false
+    assert.is_false(v.is_muted)
+end
+
 return T
 
 -- vim: et:sw=4:ts=8:sts=4:tw=80

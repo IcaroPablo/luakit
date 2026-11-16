@@ -248,6 +248,7 @@ process_limit
 wrap_js
 editable
 is_playing_audio
+is_muted
 drawing_area
 invalidate
 pattern
