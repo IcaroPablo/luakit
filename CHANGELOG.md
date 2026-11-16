@@ -15,6 +15,7 @@
 
 - Fixed leaving completion by moving the cursor, which moved it to the end of the command line.
 - Fixed completion closing whenever the command line held non-ASCII text.
+- Fixed the arguments of a command typed by its short name, as in `:o`, which never completed: only `:open` did.
 - Fixed a crash when serializing NULL lightuserdata values, which could occur with garbage-collected Lua objects used as weak table keys (fixes #1117).
 - Fixed a buffer overflow in IPC socket handling when socket paths exceed the `AF_UNIX` `sun_path` limit; replaced unsafe `strcpy` with a length-checked copy.
 - Fixed `dom_element.c` to be C99/clang compliant.

@@ -329,6 +329,8 @@ completers.command = {
     header = { "Command", "Description" },
     func = function (rem)
         local prefix, rets = rem:match("^([%w-]*)"), {}
+        -- the command's name, once a space ends it
+        local typed = rem:match("^([%w-]+)%s")
 
         -- Check each command binding for matches
         local cmds = {}
@@ -356,7 +358,10 @@ completers.command = {
                             cmd = string.format(":%s (:%s)", cmd, c[1])
                         end
 
-                        local format = c[1] .. (a.format and (" "..a.format) or "")
+                        -- the arguments complete after any of the command's
+                        -- names, so the format starts with the one typed
+                        local name = lousy.util.table.hasitem(c, typed) and typed or c[1]
+                        local format = name .. (a.format and (" "..a.format) or "")
                         cmds[cmd] = { escape(cmd), escape(m[2].desc) or "", format = format }
                         break
                     end
