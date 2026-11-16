@@ -151,6 +151,23 @@ T.test_arguments_complete_after_a_short_command_name = function ()
     end
 end
 
+T.test_modules_can_add_completion_groups = function ()
+    wait_for_start_page()
+    require("completion").completers.fruit = {
+        header = { "Fruit", "" },
+        func = function ()
+            return { { "apple", "", format = {{ lit = "apple" }} } }
+        end,
+    }
+    require("modes").add_cmds({
+        { ":eat", "Eat a fruit.", { func = function () end, format = "{fruit}" } },
+    })
+    w:enter_cmd(":eat ap")
+    w:set_mode("completion")
+    assert.equal(":eat apple", w.ibar.input.text)
+    w:set_mode()
+end
+
 return T
 
 -- vim: et:sw=4:ts=8:sts=4:tw=80

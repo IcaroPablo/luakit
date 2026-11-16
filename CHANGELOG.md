@@ -6,6 +6,7 @@
 
 - Added GitHub Actions CI workflows with cross-platform testing across Linux distributions (Alpine, Arch, Debian, Ubuntu), BSDs (FreeBSD, OpenBSD, NetBSD), and other systems.
 - Added the `completion.as_you_type` setting, off by default: the completion menu opens, and updates, while typing in the command line, once typing pauses for `completion.as_you_type_delay` milliseconds. Nothing is selected until `<Tab>` or `<Shift-Tab>`.
+- Added `completion.completers`, the completion groups by name, so a module can add its own and name it in a command's `format`.
 
 ### Changed
 

@@ -84,6 +84,15 @@ end
 
 local completers = {}
 
+--- Completion groups, by name. A command's `format` names the groups that
+-- complete its arguments, as `"{uri}"` does for `:open`, and a module can
+-- add its own here: a `header`, the titles of the menu's two columns, and a
+-- `func`, which gets the text typed for the group and returns the menu's
+-- rows, like the groups below.
+-- @type table
+-- @readonly
+_M.completers = completers
+
 local function parse(buf)
     local function match_step (state, matches)
         local new_states = {}
