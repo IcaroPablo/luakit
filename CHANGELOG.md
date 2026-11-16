@@ -16,6 +16,7 @@
 - Fixed a buffer overflow in IPC socket handling when socket paths exceed the `AF_UNIX` `sun_path` limit; replaced unsafe `strcpy` with a length-checked copy.
 - Fixed `dom_element.c` to be C99/clang compliant.
 - Restored the `enable_hyperlink_auditing` setting for builds against WebKitGTK versions prior to 2.50. On newer versions, the setting is not exposed, as it's deprecated and a no-op.
+- With `window.close_with_last_tab` on, closing a window's last tab closed the window and then raised a Lua error, reaching into the window it had just cleared.
 
 ### Contributors to this release:
 
