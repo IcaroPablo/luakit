@@ -139,6 +139,35 @@ T.test_tab_selects_completions_typed_before_the_menu_updated = function ()
     as_you_type(false)
 end
 
+T.test_arguments_complete_after_a_short_command_name = function ()
+    wait_for_start_page()
+    history.add("http://example.com/short", "short name")
+    for _, cmd in ipairs({ ":open", ":o" }) do
+        w:enter_cmd(cmd .. " example.com/sho")
+        w:set_mode("completion")
+        assert.is_true(w:is_mode("completion"))
+        assert.equal(cmd .. " http://example.com/short", w.ibar.input.text)
+        w:set_mode()
+    end
+end
+
+T.test_modules_can_add_completion_groups = function ()
+    wait_for_start_page()
+    require("completion").completers.fruit = {
+        header = { "Fruit", "" },
+        func = function ()
+            return { { "apple", "", format = {{ lit = "apple" }} } }
+        end,
+    }
+    require("modes").add_cmds({
+        { ":eat", "Eat a fruit.", { func = function () end, format = "{fruit}" } },
+    })
+    w:enter_cmd(":eat ap")
+    w:set_mode("completion")
+    assert.equal(":eat apple", w.ibar.input.text)
+    w:set_mode()
+end
+
 return T
 
 -- vim: et:sw=4:ts=8:sts=4:tw=80
