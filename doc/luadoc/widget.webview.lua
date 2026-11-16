@@ -197,6 +197,13 @@
 -- @type string
 -- @readwrite
 
+--- @property is_muted
+-- Whether all of the web page's audio is muted, including that of its frames
+-- and of the Web Audio API.
+-- @type boolean
+-- @default `false`
+-- @readwrite
+
 --- @signal scheme-request::*
 --
 -- Emitted when the webview attempts to load a URI on a custom URI scheme.
