@@ -15,6 +15,14 @@ local page_whitelist = {}
 ui:add_signal("enable", function(_, _, e) enabled = e end)
 ui:add_signal("update_rules", function(_, _, r)
     rules = r
+    -- A reload replaces the lists, so the enabled ones are taken from the new
+    -- rules, each with the state it has there
+    enabled_rules = {}
+    for name, list in pairs(rules) do
+        if lousy.util.table.hasitem(list.opts or {}, "Enabled") then
+            enabled_rules[name] = list
+        end
+    end
     ui:emit_signal("rules_updated", luakit.web_process_id)
 end)
 ui:add_signal("update_page_whitelist", function(_, _, wl)
