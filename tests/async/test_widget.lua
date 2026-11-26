@@ -46,6 +46,11 @@ T.test_webview_widget_features = function ()
     assert.is_false(v:get_feature(pdfjs))
     assert.is_true(v:set_feature(pdfjs, true))
     assert.is_true(v:get_feature(pdfjs))
+
+    v:set_pdfjs(false)
+    assert.is_false(v:get_feature(pdfjs))
+    v:set_pdfjs(true)
+    assert.is_true(v:get_feature(pdfjs))
 end
 
 return T

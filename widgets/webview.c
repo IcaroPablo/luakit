@@ -782,7 +782,10 @@ luaH_webview_set_pdfjs(lua_State *L)
     webview_data_t *d = luaH_checkwvdata(L, 1);
     gboolean enabled = luaH_checkboolean(L, 2);
 
-    g_autoptr(WebKitFeature) feature = webview_find_feature("PdfJSViewer");
+    /* WebKitGTK 2.44 renamed PdfJSViewer */
+    g_autoptr(WebKitFeature) feature = webview_find_feature("PDFJSViewer");
+    if (!feature)
+        feature = webview_find_feature("PdfJSViewer");
     if (feature)
         webkit_settings_set_feature_enabled(
                 webkit_web_view_get_settings(d->view), feature, enabled);

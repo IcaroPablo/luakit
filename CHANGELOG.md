@@ -17,6 +17,7 @@
 - Fixed a buffer overflow in IPC socket handling when socket paths exceed the `AF_UNIX` `sun_path` limit; replaced unsafe `strcpy` with a length-checked copy.
 - Fixed `dom_element.c` to be C99/clang compliant.
 - Restored the `enable_hyperlink_auditing` setting for builds against WebKitGTK versions prior to 2.50. On newer versions, the setting is not exposed, as it's deprecated and a no-op.
+- Fixed the `application.enable_pdfjs` setting having no effect on WebKitGTK 2.44 and later, which renamed the PDF.js feature from `PdfJSViewer` to `PDFJSViewer`.
 
 ### Contributors to this release:
 
