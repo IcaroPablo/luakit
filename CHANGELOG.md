@@ -20,6 +20,7 @@
 - Restored the `enable_hyperlink_auditing` setting for builds against WebKitGTK versions prior to 2.50. On newer versions, the setting is not exposed, as it's deprecated and a no-op.
 - Fixed the `adblock` module reading extended element hiding rules (`#?#`, `#$#`, `#%#` and their `#@` exceptions) as rules for blocking requests. They could only block a request whose URI held the rule's own text, yet every request was checked against them; skipping them makes checking a request 3 to 4 times faster still.
 - Fixed `adblock` rules that could never match: plain text rules with capital letters, which were compared as written with the lowercased URI, and plain text rules with a `|` anchor at either end, which was read as a literal `|`. EasyList, EasyPrivacy and the EasyList cookie list have 486 such rules.
+- Fixed `adblock` rules with `(`, `)`, `[` or `]`, which kept their special meaning in the rule's Lua pattern instead of matching themselves. Such a rule missed what it was written for, as `||[::]^$third-party` missed `[::]`, and a `[` left open made the check raise an error, which let the request through.
 
 ### Contributors to this release:
 
