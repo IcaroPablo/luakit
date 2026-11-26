@@ -78,14 +78,15 @@ ipc_send_thread(gpointer UNUSED(user_data))
         ipc_header_t *header = &out->header;
         gpointer data = out->payload;
 
-        /* The main thread closes the channel only while holding the lock */
+        /* The main thread closes the channel only while holding the lock. A
+         * message for a closed channel is dropped, without logging: in a web
+         * process, logging sends a message itself, from the main thread's Lua
+         * state. */
         g_mutex_lock(&ipc->channel_lock);
         if (ipc->channel) {
             g_io_channel_write_chars(ipc->channel, (gchar*)header, sizeof(*header), NULL, NULL);
             g_io_channel_write_chars(ipc->channel, (gchar*)data, header->length, NULL, NULL);
-        } else
-            debug("Process '%s': dropping %s message, the endpoint went away",
-                    ipc->name, ipc_type_name(header->type));
+        }
         g_mutex_unlock(&ipc->channel_lock);
 
         /* Remove keep-alive reference */
@@ -196,14 +197,17 @@ ipc_recv_and_dispatch_or_enqueue(ipc_endpoint_t *ipc)
         return;
     }
 
-    /* Otherwise, we finished downloading the message */
-    ipc_dispatch(ipc, state->hdr, state->payload);
-    g_free(state->payload);
-
-    /* Reset state for the next message */
+    /* Otherwise, we finished downloading the message. Reset the state for
+     * the next one first: a handler that runs a nested main loop (a file
+     * dialog, for one) can receive it, or disconnect the endpoint. */
+    ipc_header_t hdr = state->hdr;
+    gpointer payload = state->payload;
     state->payload = NULL;
     state->bytes_read = 0;
     state->hdr_done = FALSE;
+
+    ipc_dispatch(ipc, hdr, payload);
+    g_free(payload);
 }
 
 /* Callback function for channel watch */
