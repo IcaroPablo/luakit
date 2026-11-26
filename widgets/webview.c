@@ -760,27 +760,65 @@ permission_request_cb(WebKitWebView *UNUSED(v), WebKitPermissionRequest *request
     return ret > 0;
 }
 
+/* The WebKit feature with this identifier, or NULL; the caller unrefs it */
+static WebKitFeature *
+webview_find_feature(const gchar *identifier)
+{
+    g_autoptr(WebKitFeatureList) features
+        = webkit_settings_get_all_features();
+
+    for (gsize i = 0; i < webkit_feature_list_get_length(features); i++) {
+        WebKitFeature *feature = webkit_feature_list_get(features, i);
+        if (!strcmp(webkit_feature_get_identifier(feature), identifier))
+            return webkit_feature_ref(feature);
+    }
+
+    return NULL;
+}
+
 static gint
 luaH_webview_set_pdfjs(lua_State *L)
 {
     webview_data_t *d = luaH_checkwvdata(L, 1);
     gboolean enabled = luaH_checkboolean(L, 2);
 
-    g_autoptr(WebKitFeatureList) features
-        = webkit_settings_get_all_features();
-    WebKitSettings *settings = webkit_web_view_get_settings(d->view);
-
-    for (gsize i = 0; i < webkit_feature_list_get_length(features); i++) {
-        WebKitFeature *feature = webkit_feature_list_get(features, i);
-        if (!strcmp(
-                webkit_feature_get_identifier(feature),
-                "PdfJSViewer")) {
-            webkit_settings_set_feature_enabled(settings, feature, enabled);
-            break;
-        }
-    }
+    g_autoptr(WebKitFeature) feature = webview_find_feature("PdfJSViewer");
+    if (feature)
+        webkit_settings_set_feature_enabled(
+                webkit_web_view_get_settings(d->view), feature, enabled);
 
     return 0;
+}
+
+static gint
+luaH_webview_set_feature(lua_State *L)
+{
+    webview_data_t *d = luaH_checkwvdata(L, 1);
+    const gchar *identifier = luaL_checkstring(L, 2);
+    gboolean enabled = luaH_checkboolean(L, 3);
+
+    g_autoptr(WebKitFeature) feature = webview_find_feature(identifier);
+    if (feature)
+        webkit_settings_set_feature_enabled(
+                webkit_web_view_get_settings(d->view), feature, enabled);
+
+    lua_pushboolean(L, feature != NULL);
+    return 1;
+}
+
+static gint
+luaH_webview_get_feature(lua_State *L)
+{
+    webview_data_t *d = luaH_checkwvdata(L, 1);
+    const gchar *identifier = luaL_checkstring(L, 2);
+
+    g_autoptr(WebKitFeature) feature = webview_find_feature(identifier);
+    if (!feature)
+        return 0;
+
+    lua_pushboolean(L, webkit_settings_get_feature_enabled(
+                webkit_web_view_get_settings(d->view), feature));
+    return 1;
 }
 
 static gint
@@ -824,6 +862,8 @@ luaH_webview_index(lua_State *L, widget_t *w, luakit_token_t token)
 
       PF_CASE(ALLOW_CERTIFICATE,    luaH_webview_allow_certificate)
       PF_CASE(SET_PDFJS,            luaH_webview_set_pdfjs)
+      PF_CASE(SET_FEATURE,          luaH_webview_set_feature)
+      PF_CASE(GET_FEATURE,          luaH_webview_get_feature)
 
       /* push string properties */
       PS_CASE(HOVERED_URI,          d->hover)

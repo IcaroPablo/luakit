@@ -5,6 +5,7 @@
 ### Added
 
 - Added GitHub Actions CI workflows with cross-platform testing across Linux distributions (Alpine, Arch, Debian, Ubuntu), BSDs (FreeBSD, OpenBSD, NetBSD), and other systems.
+- Added the `webview` widget methods `set_feature` and `get_feature`, which turn any WebKit feature on or off for a view.
 
 ### Changed
 
