@@ -30,6 +30,7 @@
 - Fixed the `adblock` module reading extended element hiding rules (`#?#`, `#$#`, `#%#` and their `#@` exceptions) as rules for blocking requests. They could only block a request whose URI held the rule's own text, yet every request was checked against them; skipping them makes checking a request 3 to 4 times faster still.
 - Fixed `adblock` rules that could never match: plain text rules with capital letters, which were compared as written with the lowercased URI, and plain text rules with a `|` anchor at either end, which was read as a literal `|`. EasyList, EasyPrivacy and the EasyList cookie list have 486 such rules.
 - Fixed `adblock` filter lists reloaded by `:adblock-reload`, or by `adblock.load`, not reaching pages that were already open: their web processes kept matching requests against the old rules, and kept those in memory beside the new ones.
+- Fixed `adblock` rules with `(`, `)`, `[` or `]`, which kept their special meaning in the rule's Lua pattern instead of matching themselves. Such a rule missed what it was written for, as `||[::]^$third-party` missed `[::]`, and a `[` left open made the check raise an error, which let the request through.
 
 ### Contributors to this release:
 

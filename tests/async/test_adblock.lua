@@ -20,9 +20,12 @@ tracker.js
 -Capital-Ad.
 |adtest://plainstart.example/
 /anchored.png|
+/list?r[]=*adbox
+/paren(1)*.png
 ||ads.example^
 ||tracker.example/pixel
 ||cdn.example^$third-party
+||[::]^$third-party
 @@||ads.example/allowed^
 @@-ad-banner.png?allowed
 ]]
@@ -49,6 +52,11 @@ local cases = {
     { "adtest://site.example/x?u=adtest://plainstart.example/", false },
     { "adtest://site.example/anchored.png", true },
     { "adtest://site.example/anchored.png?x", false },
+    -- ()[] in rules are literal characters
+    { "adtest://site.example/list?r[]=x-adbox.png", true },
+    { "adtest://site.example/list?r=x-adbox.png", false },
+    { "adtest://site.example/paren(1)x.png", true },
+    { "adtest://site.example/paren1x.png", false },
     { "adtest://site.example/x.png", false },
 }
 
@@ -209,6 +217,9 @@ T.test_adblock_domain_rules = function ()
     assert.is_nil(filter(site, "https://tracker.example/other.gif"))
     assert.is_false(filter(site, "https://cdn.example/lib.js"))
     assert.is_nil(filter("https://cdn.example/", "https://cdn.example/lib.js"))
+    -- Brackets in a domain are literal too, as in an IPv6 address
+    assert.is_false(filter(site, "http://[::]/x.js"))
+    assert.is_nil(filter("http://[::]/", "http://[::]/x.js"))
 end
 
 return T

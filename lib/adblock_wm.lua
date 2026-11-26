@@ -105,7 +105,7 @@ local match_domain = function (filed, domain, uri, page_domain, uri_domain)
     local key = filed == true and domain or filed
     local patterns = domain_patterns[key]
     if not patterns then
-        local escaped = string.gsub(domain, "([%%%.%+%-%?])", "%%%1")
+        local escaped = string.gsub(domain, "([%%%.%+%-%?%(%)%[%]])", "%%%1")
         patterns = {}
         for rest, opts in pairs(filed == true and bare_domain_rule or filed) do
             table.insert(patterns, {
