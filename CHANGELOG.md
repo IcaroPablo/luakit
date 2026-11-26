@@ -10,6 +10,7 @@
 
 - Rewrote `dom_element` property access, style indexing, attribute table, and `client_rects` to use the JavaScriptCore API instead of the deprecated WebKitDOM API.
 - The `adblock` module files each rule under a token that every URI it matches contains, and checks a request only against the rules filed under its URI's tokens, instead of against every rule. With EasyList, EasyPrivacy and the EasyList cookie list, a request that isn't blocked is checked 13 to 16 times faster.
+- The `adblock` module keeps each domain anchor (`||`) rule as the part of its pattern after the domain, gives a domain whose only rule is a bare `||domain^` `true` instead of a table, and gives rules without options `true` instead of an empty table. Every web process gets its own copy of the rules, and with EasyList, EasyPrivacy and the EasyList cookie list that copy takes 12 MB instead of 51 MB; a new tab's first page also loads about 140 ms sooner. Rule counts, as on the adblock page, now count each domain anchor rule once instead of twice.
 
 ### Fixed
 
