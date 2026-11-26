@@ -34,6 +34,25 @@ T.test_webview_widget_privacy = function ()
     assert.is_true(v.private)
 end
 
+T.test_webview_widget_features = function ()
+    local v = widget{type="webview"}
+    assert.is_nil(v:get_feature("NoSuchFeature"))
+    assert.is_false(v:set_feature("NoSuchFeature", true))
+
+    -- WebKitGTK 2.44 renamed PdfJSViewer to PDFJSViewer
+    local pdfjs = v:get_feature("PDFJSViewer") ~= nil and "PDFJSViewer"
+        or "PdfJSViewer"
+    assert.is_true(v:set_feature(pdfjs, false))
+    assert.is_false(v:get_feature(pdfjs))
+    assert.is_true(v:set_feature(pdfjs, true))
+    assert.is_true(v:get_feature(pdfjs))
+
+    v:set_pdfjs(false)
+    assert.is_false(v:get_feature(pdfjs))
+    v:set_pdfjs(true)
+    assert.is_true(v:get_feature(pdfjs))
+end
+
 return T
 
 -- vim: et:sw=4:ts=8:sts=4:tw=80

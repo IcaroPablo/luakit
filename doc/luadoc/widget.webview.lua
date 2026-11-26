@@ -132,6 +132,24 @@
 --- @method allow_certificate
 -- Allow a certificate.
 
+--- @method set_feature
+-- Turn a WebKit feature on or off for the webview. Features are named by
+-- their WebKit identifier, such as `"PDFJSViewer"`.
+--
+-- WebKit reads some features only when the webview's web process starts, so
+-- set them before the first load, for example from the webview `init` signal.
+--
+-- @tparam string identifier The feature's WebKit identifier.
+-- @tparam boolean enabled Whether the feature should be on.
+-- @treturn boolean `false` if this WebKit has no feature with that identifier.
+
+--- @method get_feature
+-- Whether a WebKit feature is on for the webview.
+--
+-- @tparam string identifier The feature's WebKit identifier.
+-- @treturn boolean? Whether the feature is on, or `nil` if this WebKit has no
+-- feature with that identifier.
+
 --- @property uri
 -- The URI of the current web page.
 -- @type string
