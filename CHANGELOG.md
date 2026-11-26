@@ -18,6 +18,7 @@
 - Fixed `dom_element.c` to be C99/clang compliant.
 - Restored the `enable_hyperlink_auditing` setting for builds against WebKitGTK versions prior to 2.50. On newer versions, the setting is not exposed, as it's deprecated and a no-op.
 - Fixed the `adblock` module reading extended element hiding rules (`#?#`, `#$#`, `#%#` and their `#@` exceptions) as rules for blocking requests. They could only block a request whose URI held the rule's own text, yet every request was checked against them; skipping them makes checking a request 3 to 4 times faster still.
+- Fixed `adblock` rules that could never match: plain text rules with capital letters, which were compared as written with the lowercased URI, and plain text rules with a `|` anchor at either end, which was read as a literal `|`. EasyList, EasyPrivacy and the EasyList cookie list have 486 such rules.
 
 ### Contributors to this release:
 
