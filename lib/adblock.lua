@@ -176,6 +176,10 @@ end
 -- Convert Adblock Plus filter description to lua string pattern
 -- See http://adblockplus.org/en/filters for more information
 local abp_to_pattern = function (s)
+    -- Rules match without regard to case, like the URIs they're matched
+    -- against ($match-case is an unknown option, so those rules are skipped)
+    s = string.lower(s)
+
     -- Strip filter options
     local opts
     s, opts = get_abp_opts(s)
@@ -189,7 +193,8 @@ local abp_to_pattern = function (s)
         local has_star = string.find(s, "*", 1, true)
         local has_caret = string.find(s, "^", 1, true)
         local domain_anchor = string.match(s, "^||")
-        if not has_star and not has_caret and not domain_anchor then
+        local anchored = string.match(s, "^|") or string.match(s, "|$")
+        if not has_star and not has_caret and not anchored then
             return {s}, opts, nil, true, rule_tokens(s, true)
         end
 
@@ -226,9 +231,6 @@ local abp_to_pattern = function (s)
             -- Pipe is anchor
             v = string.gsub(v, "^|", "%^")
             v = string.gsub(v, "|$", "%$")
-
-            -- Convert to lowercase ($match-case option is not honoured)
-            v = string.lower(v)
             s[k] = v
         end
     else

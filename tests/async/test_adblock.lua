@@ -16,6 +16,9 @@ tracker.js
 |adtest://start.example^
 /end/*.gif|
 /pixel^$third-party
+-Capital-Ad.
+|adtest://plainstart.example/
+/anchored.png|
 @@-ad-banner.png?allowed
 ]]
 
@@ -34,6 +37,13 @@ local cases = {
     { "adtest://other.example/pixel/1.png", true },
     { "adtest://site.example/pixel/1.png", false },
     { "adtest://site.example/x-ad-banner.png?allowed", false },
+    -- rules match without regard to case
+    { "adtest://site.example/x-capital-ad.png", true },
+    -- | anchors hold in rules that are otherwise plain text
+    { "adtest://plainstart.example/1.png", true },
+    { "adtest://site.example/x?u=adtest://plainstart.example/", false },
+    { "adtest://site.example/anchored.png", true },
+    { "adtest://site.example/anchored.png?x", false },
     { "adtest://site.example/x.png", false },
 }
 
