@@ -184,6 +184,8 @@ local abp_to_pattern = function (s)
     local opts
     s, opts = get_abp_opts(s)
     if opts and opts.unknown == true then return {} end -- Skip rules with unknown options
+    -- Most rules have none; true stands for that, and costs no table
+    if next(opts) == nil then opts = true end
 
     local domain = nil
     local text = s
@@ -220,7 +222,15 @@ local abp_to_pattern = function (s)
         -- Caret is separator (anything but a letter, a digit, or one of the following:Â - . %)
         s = string.gsub(s, "%^", "[^%%w%%-%%.%%%%]")
 
-        if domain_anchor then
+        if domain then
+            -- Rules for one domain are filed under it, so only the part of
+            -- the pattern after the domain is kept: adblock_wm puts the
+            -- domain back in front of it, as "^https?://" and
+            -- "^https?://[^/]*%." do below
+            local escaped = string.gsub(domain, "([%%%.%+%-%?])", "%%%1")
+            local rest = string.sub(s, 3 + #escaped)
+            return { (string.gsub(rest, "|$", "%$")) }, opts, domain, false, nil
+        elseif domain_anchor then
             local p = string.sub(s, 3) -- Clip off first two || characters
             s = { "^https?://" .. p, "^https?://[^/]*%." .. p }
         else
@@ -237,18 +247,7 @@ local abp_to_pattern = function (s)
         s = {""}
     end
 
-    -- Rules for one domain are already filed under it
-    return s, opts, domain, false, not domain and rule_tokens(text, false) or nil
-end
-
-local add_unique_cached = function (pattern, opts, tab, cache_tab)
-    if cache_tab[pattern] then
-        return false
-    else
-        --cache_tab[pattern], tab[pattern] = true, pattern
-        cache_tab[pattern], tab[pattern] = true, opts
-        return true
-    end
+    return s, opts, nil, false, rule_tokens(text, false)
 end
 
 -- Rules are filed by domain or by token, so that a request is checked only
@@ -301,6 +300,22 @@ local file_rules = function (list)
     list.unfiled = nil
 end
 
+-- What "^" becomes in a pattern, which bare ||domain^ rules are left with
+-- after their domain; adblock_wm has the same
+local separator = "[^%w%-%.%%]"
+
+-- Most domains have just one rule, the bare ||domain^ with no options. Each
+-- web process gets its own copy of every table in the rules, so those domains
+-- are given true instead of a table holding the rule.
+local compact_domains = function (list)
+    for domain, rules in pairs(list.domains) do
+        local rest, opts = next(rules)
+        if rest == separator and opts == true and next(rules, rest) == nil then
+            list.domains[domain] = true
+        end
+    end
+end
+
 local list_add = function(list, line, cache, pat_exclude)
     local pats, opts, domain, plain, tokens = abp_to_pattern(line)
 
@@ -313,7 +328,13 @@ local list_add = function(list, line, cache, pat_exclude)
                 if not list.domains[domain] then
                     list.domains[domain] = {}
                 end
-                new = add_unique_cached(pat, opts, list.domains[domain], cache)
+                -- pat is only the part after the domain, so the domain goes
+                -- in the key that tells duplicate rules apart
+                if not cache["||" .. domain .. pat] then
+                    cache["||" .. domain .. pat] = true
+                    list.domains[domain][pat] = opts
+                    new = true
+                end
             else
                 new = add_unfiled(list, pat, opts, false, tokens, cache)
             end
@@ -352,6 +373,8 @@ local parse_abpfilterlist = function (filters_dir, filename, cache)
     end
     file_rules(white)
     file_rules(black)
+    compact_domains(white)
+    compact_domains(black)
 
     local wlen, blen, icnt = white.length, black.length, white.ignored + black.ignored
 
