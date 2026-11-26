@@ -56,6 +56,7 @@ focus
 focused
 font
 fullscreen
+get_feature
 get_title
 go_back
 go_forward
@@ -123,6 +124,7 @@ serif_font_family
 send_key
 set_dark_mode
 set_default_size
+set_feature
 set_pdfjs
 set_title
 show

@@ -8,6 +8,7 @@
 - Added the `completion.as_you_type` setting, off by default: the completion menu opens, and updates, while typing in the command line, once typing pauses for `completion.as_you_type_delay` milliseconds. Nothing is selected until `<Tab>` or `<Shift-Tab>`.
 - Added `completion.completers`, the completion groups by name, so a module can add its own and name it in a command's `format`.
 - Added the `webview` widget property `is_muted`, which mutes or unmutes all of a view's audio.
+- Added the `webview` widget methods `set_feature` and `get_feature`, which turn any WebKit feature on or off for a view.
 
 ### Changed
 
@@ -23,6 +24,7 @@
 - Fixed `dom_element.c` to be C99/clang compliant.
 - Restored the `enable_hyperlink_auditing` setting for builds against WebKitGTK versions prior to 2.50. On newer versions, the setting is not exposed, as it's deprecated and a no-op.
 - With `window.close_with_last_tab` on, closing a window's last tab closed the window and then raised a Lua error, reaching into the window it had just cleared.
+- Fixed the `application.enable_pdfjs` setting having no effect on WebKitGTK 2.44 and later, which renamed the PDF.js feature from `PdfJSViewer` to `PDFJSViewer`.
 
 ### Contributors to this release:
 
