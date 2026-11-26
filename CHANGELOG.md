@@ -31,6 +31,7 @@
 - Fixed `adblock` rules that could never match: plain text rules with capital letters, which were compared as written with the lowercased URI, and plain text rules with a `|` anchor at either end, which was read as a literal `|`. EasyList, EasyPrivacy and the EasyList cookie list have 486 such rules.
 - Fixed `adblock` filter lists reloaded by `:adblock-reload`, or by `adblock.load`, not reaching pages that were already open: their web processes kept matching requests against the old rules, and kept those in memory beside the new ones.
 - Fixed `adblock` rules with `(`, `)`, `[` or `]`, which kept their special meaning in the rule's Lua pattern instead of matching themselves. Such a rule missed what it was written for, as `||[::]^$third-party` missed `[::]`, and a `[` left open made the check raise an error, which let the request through.
+- Fixed `adblock` domain anchor (`||`) rules missing the hosts they name. They were looked up by the host with its port and without a leading `www.`, so `||example.com^` missed `https://example.com:8443/`, and `||www.example.com^` missed `https://www.example.com/`; EasyList, EasyPrivacy and the EasyList cookie list have 660 rules like the latter. `$third-party` and `$domain=` options also compare hosts without their port now.
 
 ### Contributors to this release:
 

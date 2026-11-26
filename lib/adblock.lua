@@ -211,6 +211,9 @@ local abp_to_pattern = function (s)
             local d = string.sub(s, 3)
             d = string.gsub(d, "/.*", "")
             d = string.gsub(d, "%^.*", "")
+            -- A port goes in the part of the pattern after the domain, as
+            -- adblock_wm looks rules up by the host without it
+            d = string.gsub(d, ":%d+$", "")
 
             -- We don't bother with wildcard domains since they aren't frequent enough
             if not string.find(d, "*") then
