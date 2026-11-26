@@ -25,6 +25,8 @@ tracker.js
 ||tracker.example/pixel
 ||cdn.example^$third-party
 ||[::]^$third-party
+||www.wwwads.example^
+||ports.example:8080^
 @@||ads.example/allowed^
 @@-ad-banner.png?allowed
 ]]
@@ -165,6 +167,8 @@ T.test_adblock_domain_rules = function ()
     local domains = adblock.rules["test.txt"].blacklist.domains
     assert.is_true(domains["ads.example"])
     assert.is_table(domains["cdn.example"])
+    assert.is_true(domains["www.wwwads.example"])
+    assert.is_table(domains["ports.example"])
 
     local filter = web_module_filter()
     local site = "https://site.example/"
@@ -181,6 +185,15 @@ T.test_adblock_domain_rules = function ()
     -- Brackets in a domain are literal too, as in an IPv6 address
     assert.is_false(filter(site, "http://[::]/x.js"))
     assert.is_nil(filter("http://[::]/", "http://[::]/x.js"))
+    -- Rules are looked up by the URI's host without its port: www. stays,
+    -- and a port in a rule only matches that port
+    assert.is_false(filter(site, "https://ads.example:8443/x.js"))
+    assert.is_false(filter(site, "http://[::]:5900/x.js"))
+    assert.is_false(filter(site, "https://www.wwwads.example/x.js"))
+    assert.is_nil(filter(site, "https://wwwads.example/x.js"))
+    assert.is_false(filter(site, "https://ports.example:8080/x.js"))
+    assert.is_nil(filter(site, "https://ports.example/x.js"))
+    assert.is_nil(filter("https://cdn.example:8443/", "https://cdn.example/lib.js"))
 end
 
 return T

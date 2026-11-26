@@ -53,11 +53,20 @@ local function third_party_match(domain1, domain2, opts)
     return true
 end
 
-local function domain_from_uri(uri)
-    local domain = (uri and string.match(string.lower(uri), "^%a+://([^/]*)/?"))
-    -- Strip leading www. www2. etc
-    domain = string.match(domain or "", "^www%d?%.(.+)") or domain
-    return domain or ""
+-- The host of a URI, without its port. Both functions skip their pattern
+-- when it can't match, as most hosts have no port and no www.
+local function host_from_uri(uri)
+    local host = uri and string.match(string.lower(uri), "^%a+://([^/]*)") or ""
+    if not string.find(host, ":", 1, true) then return host end
+    -- An IPv6 host ends in "]", so a ":" followed only by digits starts a port
+    return string.match(host, "^(.*):%d+$") or host
+end
+
+-- The host without a leading www. www2. etc, as third-party and domain=
+-- options compare it
+local function domain_from_host(host)
+    if string.sub(host, 1, 3) ~= "www" then return host end
+    return string.match(host, "^www%d?%.(.+)") or host
 end
 
 -- Whether a rule's options let it apply to this request; true is a rule
@@ -143,13 +152,16 @@ local match = function (src, dst)
     -- Matching is not case sensitive
     dst = string.lower(dst)
 
-    local src_domain = domain_from_uri(src)
-    local dst_domain = domain_from_uri(dst)
+    local src_domain = domain_from_host(host_from_uri(src))
+    local dst_host = host_from_uri(dst)
+    local dst_domain = domain_from_host(dst_host)
 
-    -- Build a table of all domains this URI falls under
+    -- Build a table of all domains this URI falls under: its host, www. and
+    -- all, since a rule for www.example.com is filed under that, and what
+    -- follows each dot in it
     local dst_domains = {}
     do
-        local d = dst_domain
+        local d = dst_host
         while d do
             dst_domains[d] = true
             d = string.match(d, "%.(.+)")
