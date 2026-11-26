@@ -13,6 +13,7 @@
 ### Changed
 
 - Rewrote `dom_element` property access, style indexing, attribute table, and `client_rects` to use the JavaScriptCore API instead of the deprecated WebKitDOM API.
+- The `adblock` module files each rule under a token that every URI it matches contains, and checks a request only against the rules filed under its URI's tokens, instead of against every rule. With EasyList, EasyPrivacy and the EasyList cookie list, a request that isn't blocked is checked 13 to 16 times faster.
 
 ### Fixed
 
@@ -25,6 +26,7 @@
 - Restored the `enable_hyperlink_auditing` setting for builds against WebKitGTK versions prior to 2.50. On newer versions, the setting is not exposed, as it's deprecated and a no-op.
 - With `window.close_with_last_tab` on, closing a window's last tab closed the window and then raised a Lua error, reaching into the window it had just cleared.
 - Fixed the `application.enable_pdfjs` setting having no effect on WebKitGTK 2.44 and later, which renamed the PDF.js feature from `PdfJSViewer` to `PDFJSViewer`.
+- Fixed the `adblock` module reading extended element hiding rules (`#?#`, `#$#`, `#%#` and their `#@` exceptions) as rules for blocking requests. They could only block a request whose URI held the rule's own text, yet every request was checked against them; skipping them makes checking a request 3 to 4 times faster still.
 
 ### Contributors to this release:
 
