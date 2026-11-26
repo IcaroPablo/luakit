@@ -150,12 +150,10 @@ end
 -- and digits that adblock_wm splits the URI into: the rule's own runs that sit
 -- between characters it matches literally, separators (^) or anchors (|, ||).
 -- A run next to a wildcard (*) or at an end without an anchor can be part of a
--- longer run in the URI. A rule matched as a pattern that has ()[] gets none,
--- since those stay magic in its Lua pattern. Plain rules match their text
--- anywhere, so only their inner runs count.
+-- longer run in the URI. Plain rules match their text anywhere, so only their
+-- inner runs count.
 local function rule_tokens(s, plain)
     s = string.lower(s)
-    if not plain and string.find(s, "[%[%]%(%)]") then return {} end
 
     local anchored_start, anchored_end = false, false
     if not plain then
@@ -171,6 +169,13 @@ local function rule_tokens(s, plain)
         if whole_start and whole_end then table.insert(tokens, token) end
     end
     return tokens
+end
+
+-- Escapes what is magic in a Lua pattern but literal in a rule: everything
+-- but * and ^, which abp_to_pattern converts itself. $ starts a rule's
+-- options, so it is gone by then. adblock_wm escapes domains the same way.
+local function escape_magic(s)
+    return (string.gsub(s, "([%%%.%+%-%?%(%)%[%]])", "%%%1"))
 end
 
 -- Convert Adblock Plus filter description to lua string pattern
@@ -213,8 +218,7 @@ local abp_to_pattern = function (s)
             end
         end
 
-        -- Protect magic characters (^$()%.[]*+-?) not used by ABP (^$()[]*)
-        s = string.gsub(s, "([%%%.%+%-%?])", "%%%1")
+        s = escape_magic(s)
 
         -- Wildcards are globbing
         s = string.gsub(s, "%*", "%.%*")
@@ -227,8 +231,7 @@ local abp_to_pattern = function (s)
             -- the pattern after the domain is kept: adblock_wm puts the
             -- domain back in front of it, as "^https?://" and
             -- "^https?://[^/]*%." do below
-            local escaped = string.gsub(domain, "([%%%.%+%-%?])", "%%%1")
-            local rest = string.sub(s, 3 + #escaped)
+            local rest = string.sub(s, 3 + #escape_magic(domain))
             return { (string.gsub(rest, "|$", "%$")) }, opts, domain, false, nil
         elseif domain_anchor then
             local p = string.sub(s, 3) -- Clip off first two || characters
