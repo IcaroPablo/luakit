@@ -60,54 +60,34 @@ local function domain_from_uri(uri)
     return domain or ""
 end
 
-local match_list = function (list, uri, uri_domains, page_domain, uri_domain)
-    -- First, check for domain name anchor (||) rules
-    for domain, _ in pairs(uri_domains) do
-        for pattern, opts in pairs(list.domains[domain] or {}) do
-            if third_party_match(page_domain, uri_domain, opts) then
-                if domain_match(page_domain, opts) and string.match(uri, pattern) then
-                    return true, pattern
-                end
-            end
-        end
-    end
-
-    -- Next, match against plain text strings
-    for pattern, opts in pairs(list.plain or {}) do
-        if third_party_match(page_domain, uri_domain, opts) then
-            if domain_match(page_domain, opts) and string.find(uri, pattern, 1, true) then
+local match_filed = function (filed, plain, uri, page_domain, uri_domain)
+    if not filed then return end
+    for pattern, opts in pairs(filed) do
+        if third_party_match(page_domain, uri_domain, opts) and domain_match(page_domain, opts) then
+            if plain then
+                if string.find(uri, pattern, 1, true) then return true, pattern end
+            elseif string.match(uri, pattern) then
                 return true, pattern
             end
         end
     end
+end
 
-    -- If the URI contains "ad", check those buckets as well
-    if string.find(uri, "ad", 1, true) then
-        -- Check plain strings with "ad" in them
-        for pattern, opts in pairs(list.ad_plain or {}) do
-            if third_party_match(page_domain, uri_domain, opts) then
-                if domain_match(page_domain, opts) and string.find(uri, pattern, 1, true) then
-                    return true, pattern
-                end
-            end
-        end
-        -- Check patterns with "ad" in them
-        for pattern, opts in pairs(list.ad_patterns or {}) do
-            if third_party_match(page_domain, uri_domain, opts) then
-                if domain_match(page_domain, opts) and string.match(uri, pattern) then
-                    return true, pattern
-                end
-            end
-        end
+-- The adblock module files a list's rules by domain and by token; a URI can
+-- only match the rules filed under its domains and tokens
+local match_list = function (list, uri, uri_domains, uri_tokens, page_domain, uri_domain)
+    local domains, plain, patterns = list.domains or {}, list.plain or {}, list.patterns or {}
+
+    for domain in pairs(uri_domains) do
+        local found, pattern = match_filed(domains[domain], false, uri, page_domain, uri_domain)
+        if found then return true, pattern end
     end
 
-    -- Finally, check for a general match
-    for pattern, opts in pairs(list.patterns or {}) do
-        if third_party_match(page_domain, uri_domain, opts) then
-            if domain_match(page_domain, opts) and string.match(uri, pattern) then
-                return true, pattern
-            end
-        end
+    for token in pairs(uri_tokens) do
+        local found, pattern = match_filed(plain[token], true, uri, page_domain, uri_domain)
+        if found then return true, pattern end
+        found, pattern = match_filed(patterns[token], false, uri, page_domain, uri_domain)
+        if found then return true, pattern end
     end
 end
 
@@ -135,9 +115,15 @@ local match = function (src, dst)
         end
     end
 
+    -- Its runs of letters and digits, and "" for the rules without a token
+    local dst_tokens = { [""] = true }
+    for token in string.gmatch(dst, "[a-z0-9]+") do
+        dst_tokens[token] = true
+    end
+
     -- Test against each list's whitelist rules first
     for _, list in pairs(enabled_rules) do
-        local found, pattern = match_list(list.whitelist, dst, dst_domains, src_domain, dst_domain)
+        local found, pattern = match_list(list.whitelist, dst, dst_domains, dst_tokens, src_domain, dst_domain)
         if found then
             msg.debug("allowing request as pattern %q matched to uri %s", pattern, dst)
             return true
@@ -146,7 +132,7 @@ local match = function (src, dst)
 
     -- Test against each list's blacklist rules
     for _, list in pairs(enabled_rules) do
-        local found, pattern = match_list(list.blacklist, dst, dst_domains, src_domain, dst_domain)
+        local found, pattern = match_list(list.blacklist, dst, dst_domains, dst_tokens, src_domain, dst_domain)
         if found then
             msg.debug("blocking request as pattern %q matched to uri %s", pattern, dst)
             return false
