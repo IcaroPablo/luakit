@@ -44,6 +44,19 @@ static char *socket_path;
 GMutex socket_path_lock;
 GCond socket_path_cond;
 
+/** Where each page lives: page id -> web_page_t, for every page every web
+ * process has reported, until that process goes away. A webview's page id
+ * changes when WebKit moves it to another process, and the page_created
+ * message from the new process may arrive before the change; a webview going
+ * back to a page in WebKit's back/forward cache moves to a process whose
+ * page_created message came long before. */
+static GHashTable *web_pages;
+
+typedef struct {
+    ipc_endpoint_t *ipc;
+    pid_t pid;
+} web_page_t;
+
 IPC_NO_HANDLER(lua_require_module)
 IPC_NO_HANDLER(web_extension_loaded)
 IPC_NO_HANDLER(crash)
@@ -65,27 +78,82 @@ ipc_recv_lua_ipc(ipc_endpoint_t *UNUSED(ipc), const ipc_lua_ipc_t *msg, guint le
 }
 
 void
-ipc_recv_scroll(ipc_endpoint_t *UNUSED(ipc), ipc_scroll_t *msg, guint UNUSED(length))
-{
-    g_ptr_array_foreach(globalconf.webviews, (GFunc)webview_scroll_recv, msg);
-}
-
-void
 ipc_recv_eval_js(ipc_endpoint_t *UNUSED(ipc), const guint8 *msg, guint length)
 {
     run_javascript_finished(msg, length);
 }
 
+static void
+web_page_free(web_page_t *page)
+{
+    ipc_endpoint_decref(page->ipc);
+    g_slice_free(web_page_t, page);
+}
+
 void
 ipc_recv_page_created(ipc_endpoint_t *ipc, const ipc_page_created_t *msg, guint UNUSED(length))
 {
+    if (!web_pages)
+        web_pages = g_hash_table_new_full(g_int64_hash, g_int64_equal,
+                g_free, (GDestroyNotify)web_page_free);
+
+    web_page_t *page = g_slice_new(web_page_t);
+    page->ipc = ipc;
+    page->pid = msg->pid;
+    ipc_endpoint_incref_no_check(ipc);
+    g_hash_table_replace(web_pages, g_memdup2(&msg->page_id, sizeof(msg->page_id)), page);
+
+    /* The webview may not have this page id yet; see webview_page_id_cb() */
     widget_t *w = webview_get_by_id(msg->page_id);
+    if (w)
+        ipc_webview_find_endpoint(w);
+}
 
-    /* Page may already have been closed */
-    if (!w) return;
+/* Connects a webview to the endpoint of the web process that has its current
+ * page, if that process has reported the page yet. */
+void
+ipc_webview_find_endpoint(widget_t *w)
+{
+    if (!web_pages)
+        return;
+    guint64 page_id = webkit_web_view_get_page_id(WEBKIT_WEB_VIEW(w->widget));
+    web_page_t *page = g_hash_table_lookup(web_pages, &page_id);
+    if (!page)
+        return;
+    webview_set_web_process_id(w, page->pid);
+    webview_connect_to_endpoint(w, page->ipc);
+}
 
-    webview_connect_to_endpoint(w, ipc);
-    webview_set_web_process_id(w, msg->pid);
+/* The endpoint for a page id, or NULL if no web process has reported it. */
+ipc_endpoint_t *
+ipc_endpoint_for_page(guint64 page_id)
+{
+    web_page_t *page = web_pages ? g_hash_table_lookup(web_pages, &page_id) : NULL;
+    return page ? page->ipc : NULL;
+}
+
+static gboolean
+web_page_is_on_endpoint(gpointer UNUSED(key), web_page_t *page, ipc_endpoint_t *ipc)
+{
+    return page->ipc == ipc;
+}
+
+void
+ipc_endpoint_closed(ipc_endpoint_t *ipc)
+{
+    /* The process's pages are gone with it */
+    if (web_pages)
+        g_hash_table_foreach_remove(web_pages, (GHRFunc)web_page_is_on_endpoint, ipc);
+
+    /* Release the connection's reference; webviews still using the endpoint
+     * keep theirs until they move to another one */
+    ipc_endpoint_decref(ipc);
+}
+
+void
+ipc_recv_scroll(ipc_endpoint_t *UNUSED(ipc), ipc_scroll_t *msg, guint UNUSED(length))
+{
+    g_ptr_array_foreach(globalconf.webviews, (GFunc)webview_scroll_recv, msg);
 }
 
 static gchar *
@@ -108,6 +176,16 @@ retry:
         goto retry;
     }
     return socket_path;
+}
+
+static gboolean
+web_extension_connected(gpointer sock)
+{
+    /* The endpoint's own reference belongs to the connection, and is released
+     * by ipc_endpoint_closed() */
+    ipc_endpoint_t *ipc = ipc_endpoint_new("UI");
+    ipc_endpoint_connect_to_socket(ipc, GPOINTER_TO_INT(sock));
+    return G_SOURCE_REMOVE;
 }
 
 static gpointer
@@ -153,8 +231,9 @@ web_extension_connect_thread(gpointer UNUSED(data))
         if ((web_socket = accept(sock, (struct sockaddr *)&remote, &size)) == -1)
             fatal("Error calling accept(): %s", strerror(errno));
 
-        ipc_endpoint_t *ipc = ipc_endpoint_new("UI");
-        ipc_endpoint_connect_to_socket(ipc, web_socket);
+        /* Endpoints are only ever touched from the main thread */
+        g_idle_add_full(G_PRIORITY_DEFAULT, web_extension_connected,
+                GINT_TO_POINTER(web_socket), NULL);
     }
 
     return NULL;
