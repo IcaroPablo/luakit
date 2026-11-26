@@ -68,14 +68,55 @@ local function domain_from_uri(uri)
     return domain or ""
 end
 
+-- Whether a rule's options let it apply to this request; true is a rule
+-- without options
+local function opts_match(opts, page_domain, uri_domain)
+    return opts == true
+        or (third_party_match(page_domain, uri_domain, opts) and domain_match(page_domain, opts))
+end
+
 local match_filed = function (filed, plain, uri, page_domain, uri_domain)
     if not filed then return end
     for pattern, opts in pairs(filed) do
-        if third_party_match(page_domain, uri_domain, opts) and domain_match(page_domain, opts) then
+        if opts_match(opts, page_domain, uri_domain) then
             if plain then
                 if string.find(uri, pattern, 1, true) then return true, pattern end
             elseif string.match(uri, pattern) then
                 return true, pattern
+            end
+        end
+    end
+end
+
+-- What "^" becomes in a pattern, as in the adblock module. A domain whose
+-- only rule is the bare ||domain^ is filed as true instead of a table.
+local separator = "[^%w%-%.%%]"
+local bare_domain_rule = { [separator] = true }
+
+-- Domain anchor rules are filed by domain with only the part of their pattern
+-- after it. The domain goes back in front, at the start of the host or after a
+-- dot in it. Those patterns are built the first time a request reaches the
+-- domain, and kept: few of the rules' domains are ever reached.
+local domain_patterns = setmetatable({}, { __mode = "k" })
+
+local match_domain = function (filed, domain, uri, page_domain, uri_domain)
+    if not filed then return end
+    -- A bare rule's patterns depend only on its domain
+    local key = filed == true and domain or filed
+    local patterns = domain_patterns[key]
+    if not patterns then
+        local escaped = string.gsub(domain, "([%%%.%+%-%?])", "%%%1")
+        patterns = {}
+        for rest, opts in pairs(filed == true and bare_domain_rule or filed) do
+            table.insert(patterns, {
+                "^https?://" .. escaped .. rest, "^https?://[^/]*%." .. escaped .. rest, opts })
+        end
+        domain_patterns[key] = patterns
+    end
+    for _, p in ipairs(patterns) do
+        if opts_match(p[3], page_domain, uri_domain) then
+            if string.match(uri, p[1]) or string.match(uri, p[2]) then
+                return true, p[1]
             end
         end
     end
@@ -87,7 +128,7 @@ local match_list = function (list, uri, uri_domains, uri_tokens, page_domain, ur
     local domains, plain, patterns = list.domains or {}, list.plain or {}, list.patterns or {}
 
     for domain in pairs(uri_domains) do
-        local found, pattern = match_filed(domains[domain], false, uri, page_domain, uri_domain)
+        local found, pattern = match_domain(domains[domain], domain, uri, page_domain, uri_domain)
         if found then return true, pattern end
     end
 

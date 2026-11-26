@@ -20,6 +20,10 @@ tracker.js
 -Capital-Ad.
 |adtest://plainstart.example/
 /anchored.png|
+||ads.example^
+||tracker.example/pixel
+||cdn.example^$third-party
+@@||ads.example/allowed^
 @@-ad-banner.png?allowed
 ]]
 
@@ -157,6 +161,54 @@ T.test_adblock_reload_reaches_open_pages = function ()
     end
     assert.is_equal("blocked", added, "a rule added by a reload doesn't reach an open page")
     assert.is_equal("loaded", removed, "a rule removed by a reload still blocks on an open page")
+end
+
+-- Domain anchor (||) rules only match http and https URIs, which the test
+-- page can't load. So this runs the web module here, with stand-ins for its
+-- IPC channel and for a page, and hands it requests itself. It returns false
+-- for a request it blocks.
+local function web_module_filter()
+    local handlers, page_created = {}, nil
+    local channel = {
+        add_signal = function (_, name, fn) handlers[name] = fn end,
+        emit_signal = function () end,
+    }
+    local env = setmetatable({
+        ipc_channel = function () return channel end,
+        luakit = {
+            web_process_id = 0,
+            add_signal = function (name, fn) if name == "page-created" then page_created = fn end end,
+        },
+    }, { __index = _G })
+    local chunk = assert(loadfile("lib/adblock_wm.lua"))
+    setfenv(chunk, env)
+    chunk()
+
+    handlers.update_rules(channel, nil, adblock.rules)
+    for name in pairs(adblock.rules) do handlers.list_set_enabled(channel, nil, name, true) end
+    local send_request
+    page_created({ add_signal = function (_, _, fn) send_request = fn end })
+    return function (page_uri, uri) return send_request({ uri = page_uri }, uri) end
+end
+
+T.test_adblock_domain_rules = function ()
+    -- A domain whose only rule is a bare ||domain^ gets true, not a table
+    local domains = adblock.rules["test.txt"].blacklist.domains
+    assert.is_true(domains["ads.example"])
+    assert.is_table(domains["cdn.example"])
+
+    local filter = web_module_filter()
+    local site = "https://site.example/"
+    assert.is_false(filter(site, "https://ads.example/x.js"))
+    assert.is_false(filter(site, "https://sub.ads.example/x.js"))
+    assert.is_false(filter(site, "http://www.ads.example/x.js"))
+    assert.is_nil(filter(site, "https://notads.example/x.js"))
+    assert.is_nil(filter(site, "https://ads.example.evil/x.js"))
+    assert.is_nil(filter(site, "https://ads.example/allowed/x.js"))
+    assert.is_false(filter(site, "https://tracker.example/pixel.gif"))
+    assert.is_nil(filter(site, "https://tracker.example/other.gif"))
+    assert.is_false(filter(site, "https://cdn.example/lib.js"))
+    assert.is_nil(filter("https://cdn.example/", "https://cdn.example/lib.js"))
 end
 
 return T
