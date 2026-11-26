@@ -146,6 +146,33 @@ local function get_abp_opts(s)
     return s, opts
 end
 
+-- The tokens of a rule that every URI it matches has whole, as runs of letters
+-- and digits that adblock_wm splits the URI into: the rule's own runs that sit
+-- between characters it matches literally, separators (^) or anchors (|, ||).
+-- A run next to a wildcard (*) or at an end without an anchor can be part of a
+-- longer run in the URI. A rule matched as a pattern that has ()[] gets none,
+-- since those stay magic in its Lua pattern. Plain rules match their text
+-- anywhere, so only their inner runs count.
+local function rule_tokens(s, plain)
+    s = string.lower(s)
+    if not plain and string.find(s, "[%[%]%(%)]") then return {} end
+
+    local anchored_start, anchored_end = false, false
+    if not plain then
+        local anchor = string.match(s, "^||?")
+        if anchor then s, anchored_start = string.sub(s, #anchor + 1), true end
+        if string.sub(s, -1) == "|" then s, anchored_end = string.sub(s, 1, -2), true end
+    end
+
+    local tokens = {}
+    for i, token, j in string.gmatch(s, "()([a-z0-9]+)()") do
+        local whole_start = (i > 1 and string.sub(s, i - 1, i - 1) ~= "*") or (i == 1 and anchored_start)
+        local whole_end = (j <= #s and string.sub(s, j, j) ~= "*") or (j > #s and anchored_end)
+        if whole_start and whole_end then table.insert(tokens, token) end
+    end
+    return tokens
+end
+
 -- Convert Adblock Plus filter description to lua string pattern
 -- See http://adblockplus.org/en/filters for more information
 local abp_to_pattern = function (s)
@@ -155,6 +182,7 @@ local abp_to_pattern = function (s)
     if opts and opts.unknown == true then return {} end -- Skip rules with unknown options
 
     local domain = nil
+    local text = s
 
     if string.len(s) > 0 then
         -- If this is matchable as a plain string, return early
@@ -162,7 +190,7 @@ local abp_to_pattern = function (s)
         local has_caret = string.find(s, "^", 1, true)
         local domain_anchor = string.match(s, "^||")
         if not has_star and not has_caret and not domain_anchor then
-            return {s}, opts, nil, true
+            return {s}, opts, nil, true, rule_tokens(s, true)
         end
 
         -- Optimize for domain anchor rules
@@ -207,7 +235,8 @@ local abp_to_pattern = function (s)
         s = {""}
     end
 
-    return s, opts, domain, false
+    -- Rules for one domain are already filed under it
+    return s, opts, domain, false, not domain and rule_tokens(text, false) or nil
 end
 
 local add_unique_cached = function (pattern, opts, tab, cache_tab)
@@ -220,27 +249,63 @@ local add_unique_cached = function (pattern, opts, tab, cache_tab)
     end
 end
 
+-- Rules are filed by domain or by token, so that a request is checked only
+-- against the rules filed under its URI's domains and tokens. Rules that have
+-- no token to file them under are filed under "", which every URI is checked
+-- against.
 local list_new = function ()
     return {
-        patterns    = {},
-        ad_patterns = {},
-        plain       = {},
-        ad_plain    = {},
-        domains     = {},
-        length      = 0,
-        ignored     = 0,
+        domains  = {}, -- domain anchor (||) rules, by the domain they anchor to
+        plain    = {}, -- rules matched as plain strings, by token
+        patterns = {}, -- rules matched as Lua patterns, by token
+        unfiled  = {}, -- plain and pattern rules, until the whole list is read
+        length   = 0,
+        ignored  = 0,
     }
 end
 
+local add_unfiled = function (list, pattern, opts, plain, tokens, cache_tab)
+    if cache_tab[pattern] then return false end
+    cache_tab[pattern] = true
+    table.insert(list.unfiled, { pattern = pattern, opts = opts, plain = plain, tokens = tokens })
+    return true
+end
+
+-- Tokens nearly every URI has, which make poor ones to file rules under
+local common_tokens = { http = true, https = true, www = true, com = true }
+
+-- Files each unfiled rule under its token that the fewest of the list's
+-- rules have, preferring longer tokens when there's a tie.
+local file_rules = function (list)
+    local counts = {}
+    for _, rule in ipairs(list.unfiled) do
+        for _, token in ipairs(rule.tokens) do
+            counts[token] = (counts[token] or 0) + 1
+        end
+    end
+    for _, rule in ipairs(list.unfiled) do
+        local best, best_cost = "", math.huge
+        for _, token in ipairs(rule.tokens) do
+            local cost = counts[token]
+            if common_tokens[token] or #token == 1 then cost = cost + #list.unfiled end
+            if cost < best_cost or (cost == best_cost and #token > #best) then
+                best, best_cost = token, cost
+            end
+        end
+        local tab = rule.plain and list.plain or list.patterns
+        tab[best] = tab[best] or {}
+        tab[best][rule.pattern] = rule.opts
+    end
+    list.unfiled = nil
+end
+
 local list_add = function(list, line, cache, pat_exclude)
-    local pats, opts, domain, plain = abp_to_pattern(line)
-    local contains_ad = string.find(line, "ad", 1, true)
+    local pats, opts, domain, plain, tokens = abp_to_pattern(line)
 
     for _, pat in ipairs(pats) do
         local new
         if plain then
-            local bucket = contains_ad and list.ad_plain or list.plain
-            new = add_unique_cached(pat, opts, bucket, cache)
+            new = add_unfiled(list, pat, opts, true, tokens, cache)
         elseif pat ~= "^http:" and pat ~= pat_exclude then
             if domain then
                 if not list.domains[domain] then
@@ -248,8 +313,7 @@ local list_add = function(list, line, cache, pat_exclude)
                 end
                 new = add_unique_cached(pat, opts, list.domains[domain], cache)
             else
-                local bucket = contains_ad and list.ad_patterns or list.patterns
-                new = add_unique_cached(pat, opts, bucket, cache)
+                new = add_unfiled(list, pat, opts, false, tokens, cache)
             end
         end
         if new then
@@ -283,6 +347,8 @@ local parse_abpfilterlist = function (filters_dir, filename, cache)
             list_add(black, line, cache.black, ".*")
         end
     end
+    file_rules(white)
+    file_rules(black)
 
     local wlen, blen, icnt = white.length, black.length, white.ignored + black.ignored
 

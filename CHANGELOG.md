@@ -9,6 +9,7 @@
 ### Changed
 
 - Rewrote `dom_element` property access, style indexing, attribute table, and `client_rects` to use the JavaScriptCore API instead of the deprecated WebKitDOM API.
+- The `adblock` module files each rule under a token that every URI it matches contains, and checks a request only against the rules filed under its URI's tokens, instead of against every rule. With EasyList, EasyPrivacy and the EasyList cookie list, a request that isn't blocked is checked 13 to 16 times faster.
 
 ### Fixed
 
