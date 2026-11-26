@@ -28,6 +28,7 @@
 - Fixed the `application.enable_pdfjs` setting having no effect on WebKitGTK 2.44 and later, which renamed the PDF.js feature from `PdfJSViewer` to `PDFJSViewer`.
 - Fixed the `adblock` module reading extended element hiding rules (`#?#`, `#$#`, `#%#` and their `#@` exceptions) as rules for blocking requests. They could only block a request whose URI held the rule's own text, yet every request was checked against them; skipping them makes checking a request 3 to 4 times faster still.
 - Fixed `adblock` rules that could never match: plain text rules with capital letters, which were compared as written with the lowercased URI, and plain text rules with a `|` anchor at either end, which was read as a literal `|`. EasyList, EasyPrivacy and the EasyList cookie list have 486 such rules.
+- Fixed `adblock` filter lists reloaded by `:adblock-reload`, or by `adblock.load`, not reaching pages that were already open: their web processes kept matching requests against the old rules, and kept those in memory beside the new ones.
 
 ### Contributors to this release:
 

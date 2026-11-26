@@ -9,6 +9,7 @@ local assert = require "luassert"
 -- Written before adblock loads, which reads every list in its folder
 local rules = [[
 ! luakit adblock test list
+/to-be-removed/
 -ad-banner.
 tracker.js
 /promo*box/
@@ -64,11 +65,14 @@ function load(uris) {
 
 local dir = luakit.data_dir .. "/adblock/"
 os.execute(string.format("mkdir -p %q", dir))
-local f = assert(io.open(dir .. "test.txt", "w"))
-f:write(rules)
-f:close()
+local function write_rules(text)
+    local f = assert(io.open(dir .. "test.txt", "w"))
+    f:write(text)
+    f:close()
+end
+write_rules(rules)
 
-f = assert(io.open("tests/html/image_css/image.png", "rb"))
+local f = assert(io.open("tests/html/image_css/image.png", "rb"))
 local image = f:read("*a")
 f:close()
 
@@ -88,6 +92,7 @@ end)
 uris = { page }
 require "config.rc"
 
+local adblock = require "adblock"
 local window = require "window"
 local w = assert(select(2, next(window.bywidget)))
 
@@ -96,13 +101,27 @@ local function eval_js(js)
     return test.wait(2000)
 end
 
-T.test_adblock_blocks_requests_by_rule = function ()
+local function wait_for_page()
     test.wait_for_idle()
     for _ = 1, 100 do
-        if not w.view.is_loading and eval_js("location.href") == page then break end
+        if not w.view.is_loading and eval_js("location.href") == page then return end
         test.delay(50)
     end
     assert.is_equal(page, eval_js("location.href"), "the test page didn't load")
+end
+
+-- Loads an image from uri, and returns "loaded" or "blocked"
+local function load_image(uri)
+    eval_js(string.format("load([%q]); true", uri))
+    for _ = 1, 40 do
+        local result = eval_js(string.format("results[%q] || ''", uri))
+        if result ~= "" then return result end
+        test.delay(25)
+    end
+end
+
+T.test_adblock_blocks_requests_by_rule = function ()
+    wait_for_page()
 
     local list = {}
     for _, case in ipairs(cases) do table.insert(list, string.format("%q", case[1])) end
@@ -117,6 +136,27 @@ T.test_adblock_blocks_requests_by_rule = function ()
         local result = eval_js(string.format("results[%q] || 'unfinished'", uri))
         assert.is_equal(blocked and "blocked" or "loaded", result, uri)
     end
+end
+
+T.test_adblock_reload_reaches_open_pages = function ()
+    wait_for_page()
+    assert.is_equal("blocked", load_image("adtest://site.example/to-be-removed/0.png"))
+    assert.is_equal("loaded", load_image("adtest://site.example/reloaded-rule/0.png"))
+
+    write_rules((rules:gsub("/to%-be%-removed/\n", "")) .. "/reloaded-rule/\n")
+    adblock.load(true)
+
+    -- The new rules reach the page's web process over luakit's IPC, which
+    -- eval_js doesn't wait for
+    local added, removed
+    for n = 1, 40 do
+        added = load_image("adtest://site.example/reloaded-rule/" .. n .. ".png")
+        removed = load_image("adtest://site.example/to-be-removed/" .. n .. ".png")
+        if added == "blocked" and removed == "loaded" then break end
+        test.delay(50)
+    end
+    assert.is_equal("blocked", added, "a rule added by a reload doesn't reach an open page")
+    assert.is_equal("loaded", removed, "a rule removed by a reload still blocks on an open page")
 end
 
 return T
