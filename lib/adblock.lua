@@ -338,8 +338,9 @@ local parse_abpfilterlist = function (filters_dir, filename, cache)
         -- Ignore comments, header and blank lines
         if line:match("^[![]") or line:match("^$") or line:match("^# ") or line:match("^#$") then
             -- dammitwhydoesntluahaveacontinuestatement
-        -- Ignore element hiding
-        elseif line:match("##") or line:match("#@#") then
+        -- Ignore element hiding: ## and #@#, and the extended #?#, #$#, #%#
+        -- and their #@ exceptions
+        elseif line:match("#@?[?$%%]?#") then
             --icnt = icnt + 1
         elseif line:match("^@@") then
             list_add(white, string.sub(line, 3), cache.white)
